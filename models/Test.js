@@ -37,6 +37,20 @@ const testSchema = new mongoose.Schema({
     trim: true,
     maxlength: [500, 'Preparation instructions cannot exceed 500 characters']
   },
+  // Result fields define the structure of outputs captured for this test
+  resultFields: [
+    {
+      label: { type: String, trim: true, required: false },
+      unit: { type: String, trim: true, default: '' },
+      referenceRange: { type: String, trim: true, default: '' },
+      type: {
+        type: String,
+        enum: ['text', 'number', 'boolean'],
+        default: 'text'
+      },
+      required: { type: Boolean, default: false }
+    }
+  ],
   image: {
     type: String, // URL or file path
     default: null

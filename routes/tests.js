@@ -110,6 +110,26 @@ router.post('/', auth, upload.single('image'), async (req, res) => {
     }
 
     const { name, description, category, price, duration, preparation } = req.body;
+    // Parse optional resultFields if provided as JSON string
+    let resultFields = [];
+    if (req.body.resultFields) {
+      try {
+        const parsed = typeof req.body.resultFields === 'string' 
+          ? JSON.parse(req.body.resultFields) 
+          : req.body.resultFields;
+        if (Array.isArray(parsed)) {
+          resultFields = parsed.map(f => ({
+            label: (f.label || '').trim(),
+            unit: (f.unit || '').trim(),
+            referenceRange: (f.referenceRange || '').trim(),
+            type: ['text', 'number', 'boolean'].includes(f.type) ? f.type : 'text',
+            required: !!f.required
+          }));
+        }
+      } catch (e) {
+        return res.status(400).json({ success: false, message: 'Invalid resultFields format' });
+      }
+    }
 
     // Validate required fields
     if (!name || !description || !category || !price || !duration) {
@@ -151,6 +171,7 @@ router.post('/', auth, upload.single('image'), async (req, res) => {
       price: priceNum,
       duration: duration.trim(),
       preparation: preparation ? preparation.trim() : '',
+      resultFields,
       image: imagePath,
       createdBy: req.user.id
     });
@@ -207,6 +228,28 @@ router.put('/:id', auth, upload.single('image'), async (req, res) => {
     }
 
     const { name, description, category, price, duration, preparation } = req.body;
+    // Parse optional resultFields if provided
+    let parsedResultFields = null;
+    if (req.body.resultFields) {
+      try {
+        const raw = typeof req.body.resultFields === 'string' 
+          ? JSON.parse(req.body.resultFields) 
+          : req.body.resultFields;
+        if (Array.isArray(raw)) {
+          parsedResultFields = raw.map(f => ({
+            label: (f.label || '').trim(),
+            unit: (f.unit || '').trim(),
+            referenceRange: (f.referenceRange || '').trim(),
+            type: ['text', 'number', 'boolean'].includes(f.type) ? f.type : 'text',
+            required: !!f.required
+          }));
+        } else {
+          return res.status(400).json({ success: false, message: 'resultFields must be an array' });
+        }
+      } catch (e) {
+        return res.status(400).json({ success: false, message: 'Invalid resultFields format' });
+      }
+    }
 
     // Find test
     const test = await Test.findById(req.params.id);
@@ -242,6 +285,7 @@ router.put('/:id', auth, upload.single('image'), async (req, res) => {
     }
     if (duration) test.duration = duration.trim();
     if (preparation !== undefined) test.preparation = preparation ? preparation.trim() : '';
+    if (parsedResultFields !== null) test.resultFields = parsedResultFields;
 
     // Handle image update
     if (req.file) {

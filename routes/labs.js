@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Lab = require('../models/Lab');
+const User = require('../models/User');
 const Test = require('../models/Test');
 const Package = require('../models/Package');
 const { authenticateToken: auth } = require('../middleware/auth');
@@ -406,7 +407,7 @@ router.delete('/:id', auth, async (req, res) => {
       });
     }
 
-    // Delete image file if exists
+  // Delete image file if exists
     if (lab.image && fs.existsSync(lab.image)) {
       fs.unlinkSync(lab.image);
     }
@@ -416,10 +417,15 @@ router.delete('/:id', auth, async (req, res) => {
     lab.updatedBy = req.user.id;
     await lab.save();
 
-    res.json({
-      success: true,
-      message: 'Lab deleted successfully'
-    });
+  // Cascade delete: remove all staff associated with this lab
+  // Includes roles: staff, lab_technician, xray_technician, local_admin assigned to this lab
+  const deleteResult = await User.deleteMany({ assignedLab: lab._id });
+
+  res.json({
+    success: true,
+    message: 'Lab deleted successfully',
+    deletedStaffCount: deleteResult?.deletedCount || 0
+  });
   } catch (error) {
     console.error('Error deleting lab:', error);
     res.status(500).json({ 

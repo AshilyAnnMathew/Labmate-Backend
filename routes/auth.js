@@ -203,6 +203,11 @@ router.post('/login', async (req, res) => {
           lastName: user.lastName,
           email: user.email,
           phone: user.phone,
+          age: user.age,
+          gender: user.gender,
+          dateOfBirth: user.dateOfBirth,
+          address: user.address,
+          emergencyContact: user.emergencyContact,
           role: user.role,
           assignedLab: user.assignedLab,
           lastLogin: user.lastLogin
@@ -249,6 +254,98 @@ router.post('/logout', authenticateToken, (req, res) => {
     success: true,
     message: 'Logout successful'
   });
+});
+
+// @route   PUT /api/auth/profile
+// @desc    Update user profile information
+// @access  Private
+router.put('/profile', authenticateToken, async (req, res) => {
+  try {
+    const { age, gender, dateOfBirth, address, emergencyContact } = req.body;
+    const userId = req.user.id;
+
+    // Find the user
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Validate required fields
+    if (age === undefined || gender === undefined || dateOfBirth === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: 'Age, gender, and date of birth are required'
+      });
+    }
+
+    // Validate age
+    if (age < 0 || age > 150) {
+      return res.status(400).json({
+        success: false,
+        message: 'Age must be between 0 and 150'
+      });
+    }
+
+    // Validate date of birth
+    const birthDate = new Date(dateOfBirth);
+    const today = new Date();
+    if (birthDate > today) {
+      return res.status(400).json({
+        success: false,
+        message: 'Date of birth cannot be in the future'
+      });
+    }
+
+    // Validate gender
+    const validGenders = ['male', 'female', 'other', 'prefer_not_to_say'];
+    if (!validGenders.includes(gender)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid gender value'
+      });
+    }
+
+    // Update user profile
+    user.age = age;
+    user.gender = gender;
+    user.dateOfBirth = birthDate;
+    
+    // Optional fields
+    if (address !== undefined) user.address = address;
+    if (emergencyContact !== undefined) user.emergencyContact = emergencyContact;
+
+    // Save the updated user
+    await user.save();
+
+    // Return updated user data (without password)
+    const updatedUser = user.toJSON();
+
+    res.json({
+      success: true,
+      message: 'Profile updated successfully',
+      data: updatedUser
+    });
+
+  } catch (error) {
+    console.error('Update profile error:', error);
+    
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({
+        success: false,
+        message: 'Validation error',
+        errors: errors
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'Server error while updating profile'
+    });
+  }
 });
 
 module.exports = router;

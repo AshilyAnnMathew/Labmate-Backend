@@ -94,11 +94,40 @@ const bookingSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  paymentDate: {
+    type: Date,
+    default: null
+  },
+  
+  // Report information
+  reportFile: {
+    type: String,
+    default: null
+  },
+  reportUploadDate: {
+    type: Date,
+    default: null
+  },
+
+  // Test results captured by lab based on Test.resultFields
+  testResults: [{
+    testId: { type: mongoose.Schema.Types.ObjectId, ref: 'Test', required: true },
+    values: [{
+      label: { type: String, trim: true },
+      value: { type: mongoose.Schema.Types.Mixed },
+      unit: { type: String, trim: true, default: '' },
+      referenceRange: { type: String, trim: true, default: '' },
+      type: { type: String, enum: ['text', 'number', 'boolean'], default: 'text' },
+      required: { type: Boolean, default: false }
+    }],
+    submittedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    submittedAt: { type: Date, default: Date.now }
+  }],
   
   // Booking status
   status: {
     type: String,
-    enum: ['pending', 'confirmed', 'in_progress', 'completed', 'cancelled'],
+    enum: ['pending', 'confirmed', 'in_progress', 'sample_collected', 'report_uploaded', 'result_published', 'completed', 'cancelled'],
     default: 'pending'
   },
   

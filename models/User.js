@@ -28,6 +28,35 @@ const userSchema = new mongoose.Schema({
     trim: true,
     match: [/^[\+]?[0-9][\d]{7,15}$/, 'Please enter a valid phone number']
   },
+  age: {
+    type: Number,
+    min: [0, 'Age cannot be negative'],
+    max: [150, 'Age cannot exceed 150']
+  },
+  gender: {
+    type: String,
+    enum: ['male', 'female', 'other', 'prefer_not_to_say'],
+    trim: true
+  },
+  dateOfBirth: {
+    type: Date,
+    validate: {
+      validator: function(date) {
+        return date <= new Date();
+      },
+      message: 'Date of birth cannot be in the future'
+    }
+  },
+  address: {
+    type: String,
+    trim: true,
+    maxlength: [500, 'Address cannot exceed 500 characters']
+  },
+  emergencyContact: {
+    type: String,
+    trim: true,
+    maxlength: [100, 'Emergency contact cannot exceed 100 characters']
+  },
   password: {
     type: String,
     required: [true, 'Password is required'],
@@ -106,6 +135,41 @@ userSchema.pre('save', function(next) {
   this.updatedAt = Date.now();
   next();
 });
+
+// Auto-update age when date of birth changes
+userSchema.pre('save', function(next) {
+  if (this.isModified('dateOfBirth') && this.dateOfBirth) {
+    this.updateAgeFromDateOfBirth();
+  }
+  next();
+});
+
+// Virtual field to calculate age from date of birth
+userSchema.virtual('calculatedAge').get(function() {
+  if (!this.dateOfBirth) return null;
+  const today = new Date();
+  const birthDate = new Date(this.dateOfBirth);
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+  
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  
+  return age;
+});
+
+// Method to update age based on date of birth
+userSchema.methods.updateAgeFromDateOfBirth = function() {
+  if (this.dateOfBirth) {
+    this.age = this.calculatedAge;
+  }
+};
+
+// Method to check if profile is complete
+userSchema.methods.isProfileComplete = function() {
+  return !!(this.age || this.dateOfBirth) && !!(this.gender) && !!(this.address);
+};
 
 // Instance method to check password
 userSchema.methods.comparePassword = async function(candidatePassword) {
