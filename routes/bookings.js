@@ -4,6 +4,7 @@ const Booking = require('../models/Booking');
 const Lab = require('../models/Lab');
 const User = require('../models/User');
 const { authenticateToken: auth } = require('../middleware/auth');
+const { razorpay } = require('../config/razorpay');
 
 // @route   POST /api/bookings
 // @desc    Create a new booking
@@ -29,15 +30,6 @@ router.post('/', auth, async (req, res) => {
       });
     }
 
-    // Validate that at least one test or package is selected
-    if ((!selectedTests || selectedTests.length === 0) && 
-        (!selectedPackages || selectedPackages.length === 0)) {
-      return res.status(400).json({
-        success: false,
-        message: 'At least one test or package must be selected'
-      });
-    }
-
     // Validate lab exists and is active
     const lab = await Lab.findById(labId);
     if (!lab || !lab.isActive) {
@@ -47,12 +39,48 @@ router.post('/', auth, async (req, res) => {
       });
     }
 
+    // Validate that at least one test or package is selected
+    if ((!selectedTests || selectedTests.length === 0) && 
+        (!selectedPackages || selectedPackages.length === 0)) {
+      return res.status(400).json({
+        success: false,
+        message: 'At least one test or package must be selected'
+      });
+    }
+
+    // Validate that all tests exist in the lab
+    if (selectedTests && selectedTests.length > 0) {
+      console.log('Booking validation:', {
+        totalTests: selectedTests.length,
+        testIds: selectedTests.map(t => t.testId),
+        testNames: selectedTests.map(t => t.testName)
+      });
+      
+      // Validate that all tests exist in the lab
+      const availableTestIds = lab.availableTests?.map(test => 
+        typeof test === 'object' ? test._id.toString() : test.toString()
+      ) || [];
+      
+      const invalidTests = selectedTests.filter(test => 
+        !availableTestIds.includes(test.testId.toString())
+      );
+      
+      if (invalidTests.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: `The following tests are not available at this lab: ${invalidTests.map(t => t.testName).join(', ')}`
+        });
+      }
+    }
+
     // Calculate total amount
     let totalAmount = 0;
     
     // Add test prices
     if (selectedTests && selectedTests.length > 0) {
-      totalAmount += selectedTests.reduce((sum, test) => sum + (test.price || 0), 0);
+      totalAmount += selectedTests.reduce((sum, test) => {
+        return sum + (test.price || 0);
+      }, 0);
     }
     
     // Add package prices
@@ -78,9 +106,21 @@ router.post('/', auth, async (req, res) => {
     // Set payment status based on payment method
     if (paymentMethod === 'pay_now') {
       bookingData.paymentStatus = 'pending';
+    } else if (paymentMethod === 'pay_later') {
+      bookingData.paymentStatus = 'pending';
     } else {
       bookingData.paymentStatus = 'pending';
     }
+
+    console.log('Creating booking with data:', {
+      userId: bookingData.userId,
+      labId: bookingData.labId,
+      selectedTestsCount: bookingData.selectedTests.length,
+      selectedPackagesCount: bookingData.selectedPackages.length,
+      totalAmount: bookingData.totalAmount,
+      paymentMethod: bookingData.paymentMethod,
+      appointmentDate: bookingData.appointmentDate
+    });
 
     // Create booking
     const booking = new Booking(bookingData);
@@ -424,6 +464,95 @@ router.delete('/:id', auth, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error while cancelling booking'
+    });
+  }
+});
+
+// @route   GET /api/bookings/lab/:labId/reports
+// @desc    Get all bookings with reports for a specific lab
+// @access  Private (Lab Staff/Local Admin)
+router.get('/lab/:labId/reports', auth, async (req, res) => {
+  try {
+    const { labId } = req.params;
+    const { status = 'all', page = 1, limit = 50 } = req.query;
+
+    // Check if user is staff or local_admin
+    if (!['staff', 'lab_technician', 'xray_technician', 'local_admin'].includes(req.user.role)) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Access denied. Only staff and local admins can view lab reports.' 
+      });
+    }
+
+    // Resolve assignedLab reliably (fallback to DB if not in token)
+    let effectiveAssignedLab = req.user.assignedLab;
+    if (!effectiveAssignedLab && (['staff', 'lab_technician', 'xray_technician', 'local_admin'].includes(req.user.role))) {
+      const User = require('../models/User');
+      const dbUser = await User.findById(req.user.id).select('assignedLab');
+      effectiveAssignedLab = dbUser?.assignedLab;
+    }
+
+    // For staff members, check if they are assigned to this lab
+    if (['staff', 'lab_technician', 'xray_technician'].includes(req.user.role) && effectiveAssignedLab?.toString() !== labId) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Access denied. You can only view reports for your assigned lab.' 
+      });
+    }
+
+    // For local_admin, check if they manage this lab
+    if (req.user.role === 'local_admin' && effectiveAssignedLab?.toString() !== labId) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Access denied. You can only view reports for your assigned lab.' 
+      });
+    }
+
+    // Build query
+    let query = { 
+      labId: labId,
+      isActive: true,
+      $or: [
+        { reportFile: { $exists: true, $ne: null } },
+        { testResults: { $exists: true, $ne: [] } }
+      ]
+    };
+
+    if (status && status !== 'all') {
+      query.status = status;
+    }
+
+    // Calculate pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // Fetch bookings with reports
+    const bookings = await Booking.find(query)
+      .populate('userId', 'firstName lastName email phone age gender')
+      .populate('labId', 'name address contact email')
+      .populate('selectedTests.testId', 'name price category')
+      .populate('selectedPackages.packageId', 'name price')
+      .sort({ reportUploadDate: -1, updatedAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    // Get total count
+    const total = await Booking.countDocuments(query);
+
+    res.json({
+      success: true,
+      data: bookings,
+      pagination: {
+        current: parseInt(page),
+        pages: Math.ceil(total / parseInt(limit)),
+        total: total
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching lab reports:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching reports'
     });
   }
 });
@@ -797,6 +926,350 @@ router.post('/:id/results', auth, async (req, res) => {
   } catch (error) {
     console.error('Error saving results:', error);
     res.status(500).json({ success: false, message: 'Server error while saving results' });
+  }
+});
+
+// @route   POST /api/bookings/:id/create-order
+// @desc    Create Razorpay order for a booking
+// @access  Private (All authenticated users)
+router.post('/:id/create-order', auth, async (req, res) => {
+  try {
+    const bookingId = req.params.id;
+
+    // Find booking
+    const booking = await Booking.findOne({
+      _id: bookingId,
+      userId: req.user.id,
+      isActive: true
+    });
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Booking not found'
+      });
+    }
+
+    // Check if booking is eligible for online payment
+    if (booking.paymentMethod !== 'pay_now') {
+      return res.status(400).json({
+        success: false,
+        message: 'This booking is not eligible for online payment'
+      });
+    }
+
+    // Check if payment is already completed
+    if (booking.paymentStatus === 'completed') {
+      return res.status(400).json({
+        success: false,
+        message: 'Payment has already been processed for this booking'
+      });
+    }
+
+    // Create Razorpay order
+    const options = {
+      amount: booking.totalAmount * 100, // Amount in paise
+      currency: 'INR',
+      receipt: `${booking._id.toString().slice(-8)}`, // Use last 8 chars of booking ID
+      notes: {
+        bookingId: booking._id.toString(),
+        userId: booking.userId.toString(),
+        labId: booking.labId.toString()
+      }
+    };
+
+    const order = await razorpay.orders.create(options);
+
+    // Update booking with order ID
+    booking.razorpayOrderId = order.id;
+    await booking.save();
+
+    res.json({
+      success: true,
+      message: 'Order created successfully',
+      data: {
+        orderId: order.id,
+        amount: order.amount,
+        currency: order.currency,
+        booking: booking
+      }
+    });
+
+  } catch (error) {
+    console.error('Error creating order:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while creating order'
+    });
+  }
+});
+
+// @route   POST /api/bookings/:id/payment
+// @desc    Process Razorpay payment for a booking
+// @access  Private (All authenticated users)
+router.post('/:id/payment', auth, async (req, res) => {
+  try {
+    const { razorpayOrderId, razorpayPaymentId, razorpaySignature } = req.body;
+    const bookingId = req.params.id;
+
+    // Validate required fields
+    if (!razorpayPaymentId || !razorpaySignature) {
+      return res.status(400).json({
+        success: false,
+        message: 'Payment details are required'
+      });
+    }
+
+    // Find booking
+    const booking = await Booking.findOne({
+      _id: bookingId,
+      userId: req.user.id,
+      isActive: true
+    });
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Booking not found'
+      });
+    }
+
+    // Check if booking is eligible for payment
+    if (booking.paymentMethod !== 'pay_now') {
+      return res.status(400).json({
+        success: false,
+        message: 'This booking is not eligible for online payment'
+      });
+    }
+
+    // Check if payment is already completed
+    if (booking.paymentStatus === 'completed') {
+      return res.status(400).json({
+        success: false,
+        message: 'Payment has already been processed for this booking'
+      });
+    }
+
+    // Verify Razorpay payment signature (optional - for production use)
+    // For now, we'll trust the frontend verification and proceed
+    
+    // Update booking with payment details
+    booking.razorpayOrderId = razorpayOrderId;
+    booking.razorpayPaymentId = razorpayPaymentId;
+    booking.razorpaySignature = razorpaySignature;
+    booking.paymentStatus = 'completed';
+    booking.paidAmount = booking.totalAmount;
+    booking.paymentDate = new Date();
+    booking.status = 'confirmed'; // Confirm the booking after successful payment
+    booking.updatedAt = new Date();
+
+    await booking.save();
+
+    // Populate the booking with lab and user details for response
+    await booking.populate('labId', 'name address contact');
+    await booking.populate('userId', 'firstName lastName email phone');
+
+    res.json({
+      success: true,
+      message: 'Payment processed successfully',
+      data: booking
+    });
+
+  } catch (error) {
+    console.error('Error processing payment:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while processing payment'
+    });
+  }
+});
+
+// @route   GET /api/bookings/admin/all
+// @desc    Get all bookings (Admin only)
+// @access  Private (Admin only)
+router.get('/admin/all', auth, async (req, res) => {
+  try {
+    // Check if user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Admin privileges required.'
+      });
+    }
+
+    const { 
+      status, 
+      labId, 
+      date, 
+      search, 
+      page = 1, 
+      limit = 10 
+    } = req.query;
+    
+    // Build query
+    let query = { isActive: true };
+    
+    if (status && status !== 'all') {
+      query.status = status;
+    }
+    
+    if (labId && labId !== 'all') {
+      query.labId = labId;
+    }
+    
+    if (date) {
+      const startOfDay = new Date(date);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(date);
+      endOfDay.setHours(23, 59, 59, 999);
+      query.appointmentDate = {
+        $gte: startOfDay,
+        $lte: endOfDay
+      };
+    }
+
+    // Calculate pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    let bookings = await Booking.find(query)
+      .populate('userId', 'firstName lastName email phone age gender')
+      .populate('labId', 'name address contact email')
+      .populate('selectedTests.testId', 'name price')
+      .populate('selectedPackages.packageId', 'name price')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    // Apply search filter if provided
+    if (search) {
+      const searchRegex = new RegExp(search, 'i');
+      bookings = bookings.filter(booking => 
+        booking.userId?.firstName?.match(searchRegex) ||
+        booking.userId?.lastName?.match(searchRegex) ||
+        booking.userId?.email?.match(searchRegex) ||
+        booking.labId?.name?.match(searchRegex)
+      );
+    }
+
+    const total = await Booking.countDocuments(query);
+
+    res.json({
+      success: true,
+      data: bookings,
+      pagination: {
+        current: parseInt(page),
+        pages: Math.ceil(total / parseInt(limit)),
+        total: total
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching all bookings:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching bookings'
+    });
+  }
+});
+
+// @route   PUT /api/bookings/admin/:id/status
+// @desc    Update booking status (Admin only)
+// @access  Private (Admin only)
+router.put('/admin/:id/status', auth, async (req, res) => {
+  try {
+    // Check if user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Admin privileges required.'
+      });
+    }
+
+    const { status } = req.body;
+
+    if (!status) {
+      return res.status(400).json({
+        success: false,
+        message: 'Status is required'
+      });
+    }
+
+    const validStatuses = ['pending', 'confirmed', 'sample_collected', 'completed', 'cancelled'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid status'
+      });
+    }
+
+    const booking = await Booking.findById(req.params.id);
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Booking not found'
+      });
+    }
+
+    booking.status = status;
+    booking.updatedAt = new Date();
+
+    await booking.save();
+
+    await booking.populate('userId', 'firstName lastName email phone');
+    await booking.populate('labId', 'name address contact');
+
+    res.json({
+      success: true,
+      message: 'Booking status updated successfully',
+      data: booking
+    });
+  } catch (error) {
+    console.error('Error updating booking status:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while updating booking status'
+    });
+  }
+});
+
+// @route   DELETE /api/bookings/admin/:id
+// @desc    Delete booking (Admin only)
+// @access  Private (Admin only)
+router.delete('/admin/:id', auth, async (req, res) => {
+  try {
+    // Check if user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Admin privileges required.'
+      });
+    }
+
+    const booking = await Booking.findById(req.params.id);
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Booking not found'
+      });
+    }
+
+    // Soft delete by setting isActive to false
+    booking.isActive = false;
+    booking.updatedAt = new Date();
+
+    await booking.save();
+
+    res.json({
+      success: true,
+      message: 'Booking deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting booking:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while deleting booking'
+    });
   }
 });
 

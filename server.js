@@ -4,6 +4,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const connectDB = require('./config/database');
+const passport = require('./config/passport');
 
 // Connect to MongoDB
 connectDB();
@@ -18,6 +19,9 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
+// Initialize passport
+app.use(passport.initialize());
+
 // Serve static files from uploads directory
 app.use('/uploads', express.static('uploads'));
 
@@ -28,6 +32,7 @@ app.use((req, res, next) => {
 });
 
 // Routes
+app.use('/api/auth', require('./routes/googleAuth'));
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/verification', require('./routes/verification'));
 app.use('/api/staff', require('./routes/staff'));
@@ -35,6 +40,7 @@ app.use('/api/tests', require('./routes/tests'));
 app.use('/api/packages', require('./routes/packages'));
 app.use('/api/labs', require('./routes/labs'));
 app.use('/api/bookings', require('./routes/bookings'));
+app.use('/api/admin', require('./routes/admin'));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

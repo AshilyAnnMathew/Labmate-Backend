@@ -20,7 +20,7 @@ const bookingSchema = new mongoose.Schema({
     testId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Test',
-      required: true
+      required: true // Always required since we only book matched tests
     },
     testName: {
       type: String,

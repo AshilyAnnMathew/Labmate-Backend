@@ -348,4 +348,34 @@ router.put('/profile', authenticateToken, async (req, res) => {
   }
 });
 
+// @route   POST /api/auth/check-email
+// @desc    Check if email already exists
+// @access  Public
+router.post('/check-email', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email is required'
+      });
+    }
+
+    // Check if email exists in database
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    
+    res.json({
+      success: true,
+      exists: !!existingUser
+    });
+  } catch (error) {
+    console.error('Error checking email:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while checking email'
+    });
+  }
+});
+
 module.exports = router;

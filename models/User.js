@@ -4,15 +4,33 @@ const bcrypt = require('bcryptjs');
 const userSchema = new mongoose.Schema({
   firstName: {
     type: String,
-    required: [true, 'First name is required'],
+    required: function() {
+      return this.provider === 'local';
+    },
     trim: true,
-    maxlength: [50, 'First name cannot exceed 50 characters']
+    maxlength: [50, 'First name cannot exceed 50 characters'],
+    validate: {
+      validator: function(v) {
+        if (!v) return this.provider !== 'local'; // Allow empty for Google OAuth users
+        return v.length >= 1;
+      },
+      message: 'First name is required for local users'
+    }
   },
   lastName: {
     type: String,
-    required: [true, 'Last name is required'],
+    required: function() {
+      return this.provider === 'local';
+    },
     trim: true,
-    maxlength: [50, 'Last name cannot exceed 50 characters']
+    maxlength: [50, 'Last name cannot exceed 50 characters'],
+    validate: {
+      validator: function(v) {
+        if (!v) return this.provider !== 'local'; // Allow empty for Google OAuth users
+        return v.length >= 1;
+      },
+      message: 'Last name is required for local users'
+    }
   },
   email: {
     type: String,
@@ -24,9 +42,17 @@ const userSchema = new mongoose.Schema({
   },
   phone: {
     type: String,
-    required: [true, 'Phone number is required'],
+    required: function() {
+      return this.provider === 'local';
+    },
     trim: true,
-    match: [/^[\+]?[0-9][\d]{7,15}$/, 'Please enter a valid phone number']
+    validate: {
+      validator: function(v) {
+        if (!v) return true; // Allow empty for Google OAuth users
+        return /^[\+]?[0-9][\d]{7,15}$/.test(v);
+      },
+      message: 'Please enter a valid phone number'
+    }
   },
   age: {
     type: Number,
@@ -59,7 +85,9 @@ const userSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: [true, 'Password is required'],
+    required: function() {
+      return this.provider === 'local';
+    },
     minlength: [6, 'Password must be at least 6 characters long']
   },
   role: {
@@ -76,6 +104,17 @@ const userSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Lab',
     default: null
+  },
+  // Google OAuth fields
+  googleId: {
+    type: String,
+    unique: true,
+    sparse: true // Allows multiple null values
+  },
+  provider: {
+    type: String,
+    enum: ['local', 'google'],
+    default: 'local'
   },
   joinDate: {
     type: Date,
