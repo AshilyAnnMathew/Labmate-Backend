@@ -24,9 +24,9 @@ const storage = multer.diskStorage({
   }
 });
 
-const upload = multer({ 
+const upload = multer({
   storage: storage,
-  limits: { 
+  limits: {
     fileSize: 5 * 1024 * 1024 // 5MB limit
   },
   fileFilter: (req, file, cb) => {
@@ -42,17 +42,17 @@ const upload = multer({
 router.get('/', auth, async (req, res) => {
   try {
     const { role } = req.user;
-    
+
     // Admin and staff get full access, users get public access
     let query = {};
     if (!['admin', 'staff'].includes(role)) {
       // Regular users only see active labs
       query = { isActive: true };
     }
-    
+
     const labs = await Lab.find(query)
-      .populate('availableTests', 'name price category')
-      .populate('availablePackages', 'name price')
+      .populate('availableTests', 'name price category image')
+      .populate('availablePackages', 'name price image')
       .sort({ createdAt: -1 });
 
     // Add createdBy info only for admin/staff
@@ -66,10 +66,10 @@ router.get('/', auth, async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching labs:', error);
-    res.status(500).json({ 
-      success: false, 
+    res.status(500).json({
+      success: false,
       message: 'Failed to fetch labs',
-      error: error.message 
+      error: error.message
     });
   }
 });
@@ -78,23 +78,30 @@ router.get('/', auth, async (req, res) => {
 router.get('/:id', auth, async (req, res) => {
   try {
     const { role } = req.user;
-    
+
     const lab = await Lab.findById(req.params.id)
-      .populate('availableTests', 'name price category description')
-      .populate('availablePackages', 'name price description selectedTests');
+      .populate('availableTests', 'name price category description image')
+      .populate({
+        path: 'availablePackages',
+        select: 'name price description selectedTests image',
+        populate: {
+          path: 'selectedTests',
+          select: 'name'
+        }
+      });
 
     if (!lab) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Lab not found' 
+      return res.status(404).json({
+        success: false,
+        message: 'Lab not found'
       });
     }
-    
+
     // Regular users can only access active labs
     if (!['admin', 'staff'].includes(role) && !lab.isActive) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Lab not found' 
+      return res.status(404).json({
+        success: false,
+        message: 'Lab not found'
       });
     }
 
@@ -112,10 +119,10 @@ router.get('/:id', auth, async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching lab:', error);
-    res.status(500).json({ 
-      success: false, 
+    res.status(500).json({
+      success: false,
       message: 'Failed to fetch lab',
-      error: error.message 
+      error: error.message
     });
   }
 });
@@ -124,7 +131,7 @@ router.get('/:id', auth, async (req, res) => {
 router.post('/', auth, upload.single('image'), async (req, res) => {
   try {
     const { role } = req.user;
-    
+
     if (!['admin', 'staff'].includes(role)) {
       return res.status(403).json({ message: 'Access denied' });
     }
@@ -144,9 +151,9 @@ router.post('/', auth, upload.single('image'), async (req, res) => {
 
     // Validate required fields
     if (!name || !description || !address || !contact) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Name, description, address, and contact are required' 
+      return res.status(400).json({
+        success: false,
+        message: 'Name, description, address, and contact are required'
       });
     }
 
@@ -155,12 +162,18 @@ router.post('/', auth, upload.single('image'), async (req, res) => {
     let parsedAvailableTests = [], parsedAvailablePackages = [];
     let parsedCapacity = {};
 
+    let parsedLocation;
+
     try {
       parsedAddress = typeof address === 'string' ? JSON.parse(address) : address;
       parsedContact = typeof contact === 'string' ? JSON.parse(contact) : contact;
       parsedOperatingHours = typeof operatingHours === 'string' ? JSON.parse(operatingHours) : operatingHours;
       parsedFacilities = typeof facilities === 'string' ? JSON.parse(facilities) : facilities;
-      
+
+      if (req.body.location) {
+        parsedLocation = typeof req.body.location === 'string' ? JSON.parse(req.body.location) : req.body.location;
+      }
+
       if (availableTests) {
         parsedAvailableTests = typeof availableTests === 'string' ? JSON.parse(availableTests) : availableTests;
       }
@@ -171,35 +184,35 @@ router.post('/', auth, upload.single('image'), async (req, res) => {
         parsedCapacity = typeof capacity === 'string' ? JSON.parse(capacity) : capacity;
       }
     } catch (parseError) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Invalid JSON format in request body' 
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid JSON format in request body'
       });
     }
 
     // Validate available tests and packages exist
     if (parsedAvailableTests.length > 0) {
-      const testCount = await Test.countDocuments({ 
-        _id: { $in: parsedAvailableTests }, 
-        isActive: true 
+      const testCount = await Test.countDocuments({
+        _id: { $in: parsedAvailableTests },
+        isActive: true
       });
       if (testCount !== parsedAvailableTests.length) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Some selected tests are invalid or inactive' 
+        return res.status(400).json({
+          success: false,
+          message: 'Some selected tests are invalid or inactive'
         });
       }
     }
 
     if (parsedAvailablePackages.length > 0) {
-      const packageCount = await Package.countDocuments({ 
-        _id: { $in: parsedAvailablePackages }, 
-        isActive: true 
+      const packageCount = await Package.countDocuments({
+        _id: { $in: parsedAvailablePackages },
+        isActive: true
       });
       if (packageCount !== parsedAvailablePackages.length) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Some selected packages are invalid or inactive' 
+        return res.status(400).json({
+          success: false,
+          message: 'Some selected packages are invalid or inactive'
         });
       }
     }
@@ -219,16 +232,24 @@ router.post('/', auth, upload.single('image'), async (req, res) => {
       availableTests: parsedAvailableTests,
       availablePackages: parsedAvailablePackages,
       capacity: parsedCapacity || { daily: 100, hourly: 10 },
+      location: parsedLocation || { lat: 0, lng: 0 },
       image: imagePath,
       isActive: isActive !== undefined ? isActive : true,
       createdBy: req.user.id
     });
 
     const savedLab = await labData.save();
-    
+
     const populatedLab = await Lab.findById(savedLab._id)
       .populate('availableTests', 'name price category')
-      .populate('availablePackages', 'name price')
+      .populate({
+        path: 'availablePackages',
+        select: 'name price',
+        populate: {
+          path: 'selectedTests',
+          select: 'name'
+        }
+      })
       .populate('createdBy', 'firstName lastName');
 
     res.status(201).json({
@@ -238,10 +259,10 @@ router.post('/', auth, upload.single('image'), async (req, res) => {
     });
   } catch (error) {
     console.error('Error creating lab:', error);
-    res.status(500).json({ 
-      success: false, 
+    res.status(500).json({
+      success: false,
       message: 'Failed to create lab',
-      error: error.message 
+      error: error.message
     });
   }
 });
@@ -250,16 +271,16 @@ router.post('/', auth, upload.single('image'), async (req, res) => {
 router.put('/:id', auth, upload.single('image'), async (req, res) => {
   try {
     const { role } = req.user;
-    
+
     if (!['admin', 'staff'].includes(role)) {
       return res.status(403).json({ message: 'Access denied' });
     }
 
     const lab = await Lab.findById(req.params.id);
     if (!lab || !lab.isActive) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Lab not found' 
+      return res.status(404).json({
+        success: false,
+        message: 'Lab not found'
       });
     }
 
@@ -310,36 +331,44 @@ router.put('/:id', auth, upload.single('image'), async (req, res) => {
         parsedCapacity = typeof capacity === 'string' ? JSON.parse(capacity) : capacity;
         lab.capacity = parsedCapacity;
       }
+      if (req.body.location) {
+        lab.location = typeof req.body.location === 'string' ? JSON.parse(req.body.location) : req.body.location;
+      }
     } catch (parseError) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Invalid JSON format in request body' 
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid JSON format in request body'
       });
     }
 
     // Validate available tests and packages exist
     if (parsedAvailableTests.length > 0) {
-      const testCount = await Test.countDocuments({ 
-        _id: { $in: parsedAvailableTests }, 
-        isActive: true 
-      });
-      if (testCount !== parsedAvailableTests.length) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Some selected tests are invalid or inactive' 
+      const validTests = await Test.find({
+        _id: { $in: parsedAvailableTests },
+        isActive: true
+      }).select('_id name');
+      const validTestIds = validTests.map(t => t._id.toString());
+      const invalidTestIds = parsedAvailableTests.filter(id => !validTestIds.includes(id.toString()));
+      if (invalidTestIds.length > 0) {
+        // Check if they exist but are inactive
+        const inactiveTests = await Test.find({ _id: { $in: invalidTestIds } }).select('_id name isActive');
+        console.log('Invalid/inactive test IDs:', invalidTestIds, 'Found:', inactiveTests);
+        return res.status(400).json({
+          success: false,
+          message: `Some selected tests are invalid or inactive: ${inactiveTests.map(t => `${t.name} (${t.isActive ? 'valid' : 'inactive'})`).join(', ') || invalidTestIds.join(', ')}`
         });
       }
     }
 
     if (parsedAvailablePackages.length > 0) {
-      const packageCount = await Package.countDocuments({ 
-        _id: { $in: parsedAvailablePackages }, 
-        isActive: true 
+      const packageCount = await Package.countDocuments({
+        _id: { $in: parsedAvailablePackages },
+        isActive: true
       });
       if (packageCount !== parsedAvailablePackages.length) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Some selected packages are invalid or inactive' 
+        return res.status(400).json({
+          success: false,
+          message: 'Some selected packages are invalid or inactive'
         });
       }
     }
@@ -360,10 +389,17 @@ router.put('/:id', auth, upload.single('image'), async (req, res) => {
     lab.updatedBy = req.user.id;
 
     await lab.save();
-    
+
     const populatedLab = await Lab.findById(lab._id)
       .populate('availableTests', 'name price category')
-      .populate('availablePackages', 'name price')
+      .populate({
+        path: 'availablePackages',
+        select: 'name price',
+        populate: {
+          path: 'selectedTests',
+          select: 'name'
+        }
+      })
       .populate('createdBy', 'firstName lastName')
       .populate('updatedBy', 'firstName lastName');
 
@@ -374,10 +410,10 @@ router.put('/:id', auth, upload.single('image'), async (req, res) => {
     });
   } catch (error) {
     console.error('Error updating lab:', error);
-    res.status(500).json({ 
-      success: false, 
+    res.status(500).json({
+      success: false,
       message: 'Failed to update lab',
-      error: error.message 
+      error: error.message
     });
   }
 });
@@ -386,28 +422,28 @@ router.put('/:id', auth, upload.single('image'), async (req, res) => {
 router.delete('/:id', auth, async (req, res) => {
   try {
     const { role } = req.user;
-    
+
     if (!['admin', 'staff'].includes(role)) {
       return res.status(403).json({ message: 'Access denied' });
     }
 
     const lab = await Lab.findById(req.params.id);
     if (!lab) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Lab not found' 
+      return res.status(404).json({
+        success: false,
+        message: 'Lab not found'
       });
     }
 
     // Check if lab is already deleted
     if (!lab.isActive) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Lab is already deleted' 
+      return res.status(400).json({
+        success: false,
+        message: 'Lab is already deleted'
       });
     }
 
-  // Delete image file if exists
+    // Delete image file if exists
     if (lab.image && fs.existsSync(lab.image)) {
       fs.unlinkSync(lab.image);
     }
@@ -417,21 +453,21 @@ router.delete('/:id', auth, async (req, res) => {
     lab.updatedBy = req.user.id;
     await lab.save();
 
-  // Cascade delete: remove all staff associated with this lab
-  // Includes roles: staff, lab_technician, xray_technician, local_admin assigned to this lab
-  const deleteResult = await User.deleteMany({ assignedLab: lab._id });
+    // Cascade delete: remove all staff associated with this lab
+    // Includes roles: staff, lab_technician, xray_technician, local_admin assigned to this lab
+    const deleteResult = await User.deleteMany({ assignedLab: lab._id });
 
-  res.json({
-    success: true,
-    message: 'Lab deleted successfully',
-    deletedStaffCount: deleteResult?.deletedCount || 0
-  });
+    res.json({
+      success: true,
+      message: 'Lab deleted successfully',
+      deletedStaffCount: deleteResult?.deletedCount || 0
+    });
   } catch (error) {
     console.error('Error deleting lab:', error);
-    res.status(500).json({ 
-      success: false, 
+    res.status(500).json({
+      success: false,
       message: 'Failed to delete lab',
-      error: error.message 
+      error: error.message
     });
   }
 });

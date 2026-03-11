@@ -7,14 +7,14 @@ const bookingSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
-  
+
   // Lab information
   labId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Lab',
     required: true
   },
-  
+
   // Selected tests and packages
   selectedTests: [{
     testId: {
@@ -31,7 +31,7 @@ const bookingSchema = new mongoose.Schema({
       required: true
     }
   }],
-  
+
   selectedPackages: [{
     packageId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -47,7 +47,7 @@ const bookingSchema = new mongoose.Schema({
       required: true
     }
   }],
-  
+
   // Appointment details
   appointmentDate: {
     type: Date,
@@ -57,20 +57,20 @@ const bookingSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  
+
   // Payment information
   paymentMethod: {
     type: String,
     enum: ['pay_now', 'pay_later'],
     required: true
   },
-  
+
   paymentStatus: {
     type: String,
     enum: ['pending', 'completed', 'failed', 'refunded'],
     default: 'pending'
   },
-  
+
   // Razorpay payment details
   razorpayOrderId: {
     type: String,
@@ -84,7 +84,7 @@ const bookingSchema = new mongoose.Schema({
     type: String,
     default: null
   },
-  
+
   // Pricing
   totalAmount: {
     type: Number,
@@ -98,7 +98,7 @@ const bookingSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
-  
+
   // Report information
   reportFile: {
     type: String,
@@ -109,7 +109,22 @@ const bookingSchema = new mongoose.Schema({
     default: null
   },
 
-  // Test results captured by lab based on Test.resultFields
+  // Samples tracking for tests
+  samples: [{
+    sampleId: { type: String, required: true }, // Unique UUID for barcode tracking
+    tests: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Test' }], // Direct tests
+    packages: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Package' }], // Packages
+    status: {
+      type: String,
+      enum: ['processing', 'partially_completed', 'completed', 'verified'],
+      default: 'processing'
+    },
+    sampleType: { type: String, default: 'Blood' },
+    collectedAt: { type: Date, default: null },
+    collectedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+  }],
+
+  // Test results captured by lab
   testResults: [{
     testId: { type: mongoose.Schema.Types.ObjectId, ref: 'Test', required: true },
     values: [{
@@ -120,30 +135,38 @@ const bookingSchema = new mongoose.Schema({
       type: { type: String, enum: ['text', 'number', 'boolean'], default: 'text' },
       required: { type: Boolean, default: false }
     }],
+    // For imaging tests (ECG, X-ray, CT scan etc.)
+    resultFile: { type: String, default: null },     // Path to uploaded image/PDF
+    machineResultFile: { type: String, default: null }, // Path to analyzer raw output
+    analyzer: { type: String, default: null },       // Analyzer name/ID
+    findings: { type: String, trim: true, default: '' }, // Text findings/interpretation
+    status: { type: String, enum: ['pending', 'testing', 'completed', 'verified'], default: 'pending' },
     submittedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    submittedAt: { type: Date, default: Date.now }
+    submittedAt: { type: Date, default: null },
+    verifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    verifiedAt: { type: Date, default: null }
   }],
-  
+
   // Booking status
   status: {
     type: String,
-    enum: ['pending', 'confirmed', 'in_progress', 'sample_collected', 'report_uploaded', 'result_published', 'completed', 'cancelled'],
+    enum: ['pending', 'confirmed', 'arrived', 'in_progress', 'sample_collected', 'testing', 'results_entered', 'processing', 'partially_completed', 'report_uploaded', 'result_published', 'completed', 'verified', 'cancelled'],
     default: 'pending'
   },
-  
+
   // Additional information
   notes: {
     type: String,
     default: ''
   },
-  
+
   // User location at time of booking
   userLocation: {
     latitude: Number,
     longitude: Number,
     address: String
   },
-  
+
   // Timestamps
   createdAt: {
     type: Date,
@@ -153,7 +176,13 @@ const bookingSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
-  
+
+  // Reminder tracking
+  remindersSent: {
+    reminder24h: { type: Boolean, default: false },
+    reminder1h: { type: Boolean, default: false }
+  },
+
   // Soft delete
   isActive: {
     type: Boolean,
@@ -164,7 +193,7 @@ const bookingSchema = new mongoose.Schema({
 });
 
 // Update the updatedAt field before saving
-bookingSchema.pre('save', function(next) {
+bookingSchema.pre('save', function (next) {
   this.updatedAt = new Date();
   next();
 });

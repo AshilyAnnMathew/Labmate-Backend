@@ -83,35 +83,35 @@ router.post('/', authenticateToken, async (req, res) => {
 
     // Validation
     if (!firstName || !lastName || !email || !phone || !role || !password) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'All fields are required.' 
+      return res.status(400).json({
+        success: false,
+        message: 'All fields are required.'
       });
     }
 
     // Check if email already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Email already exists.' 
+      return res.status(400).json({
+        success: false,
+        message: 'Email already exists.'
       });
     }
 
     // Validate role
     const validRoles = ['staff', 'lab_technician', 'xray_technician', 'local_admin'];
     if (!validRoles.includes(role)) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Invalid role. Must be staff, lab_technician, xray_technician, or local_admin.' 
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid role. Must be staff, lab_technician, xray_technician, or local_admin.'
       });
     }
 
     // Validate lab assignment for local_admin role
     if (role === 'local_admin' && (!assignedLab || assignedLab.trim() === '')) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Lab assignment is required for local_admin role.' 
+      return res.status(400).json({
+        success: false,
+        message: 'Lab assignment is required for local_admin role.'
       });
     }
 
@@ -135,8 +135,8 @@ router.post('/', authenticateToken, async (req, res) => {
     // Send welcome email with login credentials
     try {
       await emailService.sendStaffWelcomeEmail(
-        newStaff.email, 
-        newStaff.firstName, 
+        newStaff.email,
+        newStaff.firstName,
         newStaff.lastName,
         password,
         newStaff.role,
@@ -151,7 +151,7 @@ router.post('/', authenticateToken, async (req, res) => {
 
     // Return staff member without password, populated with lab info if assigned
     let staffData = newStaff.toJSON();
-    
+
     // If assignedLab exists, populate it
     if (staffData.assignedLab) {
       const Lab = require('../models/Lab');
@@ -175,8 +175,8 @@ router.post('/', authenticateToken, async (req, res) => {
       name: error.name,
       code: error.code
     });
-    res.status(500).json({ 
-      success: false, 
+    res.status(500).json({
+      success: false,
       message: 'Server error. Could not create staff member.',
       error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
@@ -199,9 +199,9 @@ router.put('/:id', authenticateToken, async (req, res) => {
     // Check if staff member exists
     const staff = await User.findById(staffId);
     if (!staff) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Staff member not found.' 
+      return res.status(404).json({
+        success: false,
+        message: 'Staff member not found.'
       });
     }
 
@@ -209,18 +209,18 @@ router.put('/:id', authenticateToken, async (req, res) => {
     if (email && email !== staff.email) {
       const existingUser = await User.findOne({ email });
       if (existingUser) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Email already exists.' 
+        return res.status(400).json({
+          success: false,
+          message: 'Email already exists.'
         });
       }
     }
 
     // Validate lab assignment for local_admin role
     if (role === 'local_admin' && (!assignedLab || assignedLab.trim() === '')) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Lab assignment is required for local_admin role.' 
+      return res.status(400).json({
+        success: false,
+        message: 'Lab assignment is required for local_admin role.'
       });
     }
 
@@ -259,9 +259,9 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
   } catch (error) {
     console.error('Error updating staff member:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Server error. Could not update staff member.' 
+    res.status(500).json({
+      success: false,
+      message: 'Server error. Could not update staff member.'
     });
   }
 });
@@ -280,18 +280,18 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 
     // Prevent admin from deleting themselves
     if (staffId === req.user.id) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'You cannot delete your own account.' 
+      return res.status(400).json({
+        success: false,
+        message: 'You cannot delete your own account.'
       });
     }
 
     // Check if staff member exists
     const staff = await User.findById(staffId);
     if (!staff) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Staff member not found.' 
+      return res.status(404).json({
+        success: false,
+        message: 'Staff member not found.'
       });
     }
 
@@ -304,9 +304,9 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 
   } catch (error) {
     console.error('Error deleting staff member:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Server error. Could not delete staff member.' 
+    res.status(500).json({
+      success: false,
+      message: 'Server error. Could not delete staff member.'
     });
   }
 });
@@ -323,9 +323,9 @@ router.get('/:id', authenticateToken, async (req, res) => {
 
     const staff = await User.findById(req.params.id).select('-password');
     if (!staff) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Staff member not found.' 
+      return res.status(404).json({
+        success: false,
+        message: 'Staff member not found.'
       });
     }
 
@@ -336,9 +336,9 @@ router.get('/:id', authenticateToken, async (req, res) => {
 
   } catch (error) {
     console.error('Error fetching staff member:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Server error. Could not fetch staff member.' 
+    res.status(500).json({
+      success: false,
+      message: 'Server error. Could not fetch staff member.'
     });
   }
 });
@@ -455,9 +455,9 @@ router.post('/lab/:labId', authenticateToken, async (req, res) => {
 
     // Check if user is local_admin and has access to this lab
     if (role !== 'local_admin' || assignedLab.toString() !== labId) {
-      return res.status(403).json({ 
-        success: false, 
-        message: 'Access denied. You can only manage staff for your assigned lab.' 
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. You can only manage staff for your assigned lab.'
       });
     }
 
@@ -465,27 +465,27 @@ router.post('/lab/:labId', authenticateToken, async (req, res) => {
 
     // Validation
     if (!firstName || !lastName || !email || !phone || !staffRole || !password) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'All fields are required.' 
+      return res.status(400).json({
+        success: false,
+        message: 'All fields are required.'
       });
     }
 
     // Check if email already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Email already exists.' 
+      return res.status(400).json({
+        success: false,
+        message: 'Email already exists.'
       });
     }
 
     // Validate role (local admin can only create staff, lab_technician, xray_technician - not other local_admin or admin)
     const validRoles = ['staff', 'lab_technician', 'xray_technician'];
     if (!validRoles.includes(staffRole)) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Invalid role. You can only create staff, lab_technician, or xray_technician.' 
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid role. You can only create staff, lab_technician, or xray_technician.'
       });
     }
 
@@ -509,8 +509,8 @@ router.post('/lab/:labId', authenticateToken, async (req, res) => {
     // Send welcome email with login credentials
     try {
       await emailService.sendStaffWelcomeEmail(
-        newStaff.email, 
-        newStaff.firstName, 
+        newStaff.email,
+        newStaff.firstName,
         newStaff.lastName,
         password,
         newStaff.role,
@@ -525,7 +525,7 @@ router.post('/lab/:labId', authenticateToken, async (req, res) => {
 
     // Return staff member without password, populated with lab info
     let staffData = newStaff.toJSON();
-    
+
     // Populate lab information
     const Lab = require('../models/Lab');
     const lab = await Lab.findById(labId).select('name');
@@ -547,8 +547,8 @@ router.post('/lab/:labId', authenticateToken, async (req, res) => {
       name: error.name,
       code: error.code
     });
-    res.status(500).json({ 
-      success: false, 
+    res.status(500).json({
+      success: false,
       message: 'Server error. Could not create staff member.',
       error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
@@ -565,9 +565,9 @@ router.put('/lab/:labId/:staffId', authenticateToken, async (req, res) => {
 
     // Check if user is local_admin and has access to this lab
     if (role !== 'local_admin' || assignedLab.toString() !== labId) {
-      return res.status(403).json({ 
-        success: false, 
-        message: 'Access denied. You can only manage staff for your assigned lab.' 
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. You can only manage staff for your assigned lab.'
       });
     }
 
@@ -576,17 +576,17 @@ router.put('/lab/:labId/:staffId', authenticateToken, async (req, res) => {
     // Check if staff member exists and belongs to this lab
     const staff = await User.findById(staffId);
     if (!staff) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Staff member not found.' 
+      return res.status(404).json({
+        success: false,
+        message: 'Staff member not found.'
       });
     }
 
     // Ensure the staff member belongs to the lab the local admin manages
     if (staff.assignedLab.toString() !== labId) {
-      return res.status(403).json({ 
-        success: false, 
-        message: 'Access denied. You can only manage staff assigned to your lab.' 
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. You can only manage staff assigned to your lab.'
       });
     }
 
@@ -594,9 +594,9 @@ router.put('/lab/:labId/:staffId', authenticateToken, async (req, res) => {
     if (email && email !== staff.email) {
       const existingUser = await User.findOne({ email });
       if (existingUser) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Email already exists.' 
+        return res.status(400).json({
+          success: false,
+          message: 'Email already exists.'
         });
       }
     }
@@ -605,9 +605,9 @@ router.put('/lab/:labId/:staffId', authenticateToken, async (req, res) => {
     if (staffRole) {
       const validRoles = ['staff', 'lab_technician', 'xray_technician'];
       if (!validRoles.includes(staffRole)) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Invalid role. You can only assign staff, lab_technician, or xray_technician roles.' 
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid role. You can only assign staff, lab_technician, or xray_technician roles.'
         });
       }
     }
@@ -644,9 +644,9 @@ router.put('/lab/:labId/:staffId', authenticateToken, async (req, res) => {
 
   } catch (error) {
     console.error('Error updating staff member:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Server error. Could not update staff member.' 
+    res.status(500).json({
+      success: false,
+      message: 'Server error. Could not update staff member.'
     });
   }
 });
@@ -661,26 +661,26 @@ router.delete('/lab/:labId/:staffId', authenticateToken, async (req, res) => {
 
     // Check if user is local_admin and has access to this lab
     if (role !== 'local_admin' || assignedLab.toString() !== labId) {
-      return res.status(403).json({ 
-        success: false, 
-        message: 'Access denied. You can only manage staff for your assigned lab.' 
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. You can only manage staff for your assigned lab.'
       });
     }
 
     // Check if staff member exists and belongs to this lab
     const staff = await User.findById(staffId);
     if (!staff) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Staff member not found.' 
+      return res.status(404).json({
+        success: false,
+        message: 'Staff member not found.'
       });
     }
 
     // Ensure the staff member belongs to the lab the local admin manages
     if (staff.assignedLab.toString() !== labId) {
-      return res.status(403).json({ 
-        success: false, 
-        message: 'Access denied. You can only manage staff assigned to your lab.' 
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. You can only manage staff assigned to your lab.'
       });
     }
 
@@ -693,11 +693,126 @@ router.delete('/lab/:labId/:staffId', authenticateToken, async (req, res) => {
 
   } catch (error) {
     console.error('Error deleting staff member:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Server error. Could not delete staff member.' 
+    res.status(500).json({
+      success: false,
+      message: 'Server error. Could not delete staff member.'
+    });
+  }
+});
+
+// @route   GET /api/staff/lab/:labId/dashboard-stats
+// @desc    Get advanced dashboard statistics for staff (Staff only)
+// @access  Local Admin and Staff only
+router.get('/lab/:labId/dashboard-stats', authenticateToken, async (req, res) => {
+  try {
+    const { role } = req.user;
+    const { labId } = req.params;
+
+    // Check if user is staff or local_admin
+    if (!['staff', 'lab_technician', 'xray_technician', 'local_admin'].includes(role)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Only staff and local admins can view dashboard stats.'
+      });
+    }
+
+    // Resolve assignedLab reliably
+    let effectiveAssignedLab = req.user.assignedLab;
+    if (!effectiveAssignedLab) {
+      const dbUser = await User.findById(req.user.id).select('assignedLab');
+      effectiveAssignedLab = dbUser?.assignedLab;
+    }
+
+    if (effectiveAssignedLab?.toString() !== labId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. You can only view stats for your assigned lab.'
+      });
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const Booking = require('../models/Booking');
+
+    // 1. Fetch all bookings for the lab created today (or updated today)
+    const activeBookings = await Booking.find({
+      labId,
+      isActive: true,
+      $or: [
+        { appointmentDate: { $gte: today } },
+        { status: { $in: ['pending', 'confirmed', 'sample_collected', 'processing', 'partially_completed'] } }
+      ]
+    }).select('status paymentStatus samples testResults');
+
+    // 2. Compute stats
+    let totalSamplesCollectedToday = 0;
+    let samplesProcessing = 0;
+    let partiallyCompletedSamples = 0;
+    let completedSamples = 0;
+    let reportsReadyForVerification = 0;
+    let pendingPayments = 0;
+    let criticalAlerts = 0;
+
+    activeBookings.forEach(b => {
+      // Pending Payments
+      if (b.paymentStatus === 'pending') pendingPayments++;
+
+      // Check Sample Level Statuses
+      if (b.samples && b.samples.length > 0) {
+        b.samples.forEach(s => {
+          if (s.collectedAt && s.collectedAt >= today) {
+            totalSamplesCollectedToday++;
+          }
+          if (s.status === 'processing') samplesProcessing++;
+          if (s.status === 'partially_completed') partiallyCompletedSamples++;
+          if (s.status === 'completed') completedSamples++;
+        });
+      }
+
+      // Check test results ready for verification
+      if (b.testResults && b.testResults.length > 0) {
+        // Find tests that are completed but not verified
+        const unverifiedTests = b.testResults.filter(tr => tr.status === 'completed');
+        if (unverifiedTests.length > 0) {
+          reportsReadyForVerification += unverifiedTests.length;
+        }
+
+        // Logic for critical alerts (dummy check: values outside ref bounds)
+        // In real life, we should parse reference bounds. For now, mark high/low text matches
+        b.testResults.forEach(tr => {
+          tr.values.forEach(v => {
+            // simplified pseudo-critical check
+            if (v.value && typeof v.value === 'string' && (v.value.toLowerCase().includes('high') || v.value.toLowerCase().includes('low') || v.value.toLowerCase().includes('critical'))) {
+              criticalAlerts++;
+            }
+            // Or if it's a number and out of bounds (would require complex string parsing of referenceRange)
+          });
+        });
+      }
+    });
+
+    res.json({
+      success: true,
+      data: {
+        totalSamplesCollectedToday,
+        samplesProcessing,
+        partiallyCompletedSamples,
+        completedSamples,
+        reportsReadyForVerification,
+        pendingPayments,
+        criticalAlerts
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching advanced dashboard stats:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching dashboard stats'
     });
   }
 });
 
 module.exports = router;
+

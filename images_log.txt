@@ -1,0 +1,25 @@
+--- TESTS ---
+Test: Complete Blood Count (CBC) | Category: blood | Image: uploads\tests\test-1759941322091-511753722.jpg
+Test: Fasting Blood Sugar (FBS) | Category: blood | Image: uploads\tests\test-1759941397557-751686650.jpg
+Test: Lipid Profile | Category: blood | Image: uploads\tests\test-1759941468133-256756903.jpg
+Test: Urinalysis | Category: urine | Image: uploads\tests\test-1759941535172-225026693.jpg
+Test: Thyroid Function Test (T3, T4, TSH) | Category: blood | Image: uploads\tests\test-1759941615648-440284018.jpg
+Test: Complete Blood Count (CBC) | Category: blood | Image: uploads\tests\test-1760516920929-269707896.jpg
+Test: Lipid Profile | Category: blood | Image: uploads\tests\test-1760517087459-385059303.jpg
+Test: Blood Sugar | Category: blood | Image: uploads\tests\test-1760517163783-97206145.jpg
+Test: Lipid Profile | Category: blood | Image: uploads\tests\test-1760517882929-508747816.jpg
+Test: Blood Sugar (Fasting) | Category: blood | Image: uploads\tests\test-1760518081473-932962004.jpg
+Test: Liver Functionality test | Category: pathology | Image: uploads\tests\test-1760680641104-722838569.jpg
+Test: Haemoglobin | Category: blood | Image: uploads\tests\test-1761111631980-836004303.jpg
+Test: Haemoglobi | Category: blood | Image: NULL
+Test: Blood Pressure | Category: imaging | Image: uploads\tests\test-1769620527139-463499352.png
+Test: Pulmonary Function Test | Category: imaging | Image: uploads\tests\test-1770823386150-176956094.jpg
+Test: Chest XRAY | Category: imaging | Image: uploads\tests\test-1770823508445-359388186.jpg
+Test: ECG | Category: cardiology | Image: uploads\tests\test-1770823605880-593662012.jpg
+Test: Thyroid Profile | Category: blood | Image: uploads\tests\test-1773074587862-196573927.jpg
+
+--- PACKAGES ---
+Package: Basic | Image: uploads\packages\package-1759942193743-850384530.jpg
+Package: blood check | Image: uploads\packages\package-1760518124279-824371427.jpg
+Package: Basic Health Checkup | Image: uploads\packages\package-1760680767866-242182280.jpg
+Package: Kidney Functionality | Image: uploads\packages\package-1769659422654-154904466.png
