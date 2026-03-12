@@ -1818,6 +1818,37 @@ router.put('/:id/publish', auth, async (req, res) => {
       // Don't fail the publish operation
     }
 
+    // ── Send WhatsApp notification (non-blocking) ──
+    try {
+      const whatsappService = require('../services/whatsappService');
+      const patientPhone = booking.userId?.phone;
+      const firstName = booking.userId?.firstName || 'Patient';
+      const labName = booking.labId?.name || 'LabMate360';
+
+      // Build test names list
+      const testNames = [];
+      (booking.selectedTests || []).forEach(t => {
+        const name = t.testId?.name || t.testName;
+        if (name) testNames.push(name);
+      });
+      (booking.selectedPackages || []).forEach(p => {
+        const name = p.packageId?.name || p.packageName;
+        if (name) testNames.push(name);
+      });
+
+      if (patientPhone) {
+        whatsappService.sendResultPublishedMessage(patientPhone, firstName, labName, testNames, booking._id)
+          .then(result => {
+            if (result.success) console.log('WhatsApp notification sent to', patientPhone);
+            else console.warn('WhatsApp notification skipped:', result.error);
+          })
+          .catch(err => console.error('WhatsApp notification error:', err));
+      }
+    } catch (whatsappErr) {
+      console.error('Error preparing WhatsApp notification:', whatsappErr);
+      // Don't fail the publish operation
+    }
+
     res.json({
       success: true,
       message: 'Results published to patient successfully',
