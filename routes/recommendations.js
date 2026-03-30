@@ -5,6 +5,8 @@ const axios = require('axios');
 const { authenticateToken: auth } = require('../middleware/auth');
 const Vital = require('../models/Vital');
 const User = require('../models/User');
+const Booking = require('../models/Booking');
+
 
 const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://localhost:5001';
 
@@ -12,19 +14,89 @@ async function buildInputData(userId) {
   const user = await User.findById(userId).select('age gender');
 
   const latestPPG = await Vital.findOne({ userId, source: 'ppg' }).sort({ createdAt: -1 });
+
+  // Look for any manual/imported Vital with BP / sugar / cholesterol
   const latestManual = await Vital.findOne({
     userId,
-    $or: [{ systolicBP: { $exists: true } }, { bloodSugar: { $ne: null } }, { cholesterol: { $exists: true } }]
+    $or: [
+      { systolicBP: { $exists: true } },
+      { bloodPressure: { $ne: null } },
+      { bloodSugar: { $ne: null } },
+      { cholesterol: { $exists: true } }
+    ]
   }).sort({ createdAt: -1 });
+
+  // Parse BP: prefer numeric fields, fall back to "X/Y" string
+  let systolicBP = latestManual?.systolicBP;
+  let diastolicBP = latestManual?.diastolicBP;
+
+  if ((!systolicBP || !diastolicBP) && latestManual?.bloodPressure?.value) {
+    const parts = String(latestManual.bloodPressure.value).split('/');
+    if (parts.length === 2) {
+      const s = parseInt(parts[0], 10);
+      const d = parseInt(parts[1], 10);
+      if (!isNaN(s)) systolicBP = s;
+      if (!isNaN(d)) diastolicBP = d;
+    }
+  }
+
+  let bloodSugar = latestManual?.bloodSugar?.value;
+  const cholesterol = latestManual?.cholesterol;
+
+  // Final fallback: scan booking lab results for BP/sugar just like the dashboard does
+  if (!systolicBP || !diastolicBP || !bloodSugar) {
+    const bpPattern = /^\d{2,3}\/\d{2,3}$/;
+    const recentBookings = await Booking.find({
+      userId,
+      status: { $in: ['result_published', 'completed'] },
+      testResults: { $exists: true, $ne: [] }
+    }).sort({ appointmentDate: -1 }).limit(10).populate('selectedTests.testId', 'name');
+
+    for (const booking of recentBookings) {
+      if (systolicBP && diastolicBP && bloodSugar) break;
+      const testMap = {};
+      (booking.selectedTests || []).forEach(t => {
+        if (t.testId) testMap[t.testId._id.toString()] = (t.testName || t.testId.name || '').toLowerCase();
+      });
+
+      for (const result of (booking.testResults || [])) {
+        const testName = testMap[result.testId?.toString()] || '';
+
+        if (!systolicBP || !diastolicBP) {
+          const sys = result.values?.find(v => v.label?.toLowerCase().includes('systolic'));
+          const dia = result.values?.find(v => v.label?.toLowerCase().includes('diastolic'));
+          if (sys && dia) {
+            const s = parseInt(sys.value, 10);
+            const d = parseInt(dia.value, 10);
+            if (!isNaN(s)) systolicBP = s;
+            if (!isNaN(d)) diastolicBP = d;
+          }
+          if (!systolicBP || !diastolicBP) {
+            const bpVal = result.values?.find(v => v.value && bpPattern.test(String(v.value)));
+            if (bpVal) {
+              const [s, d] = String(bpVal.value).split('/').map(n => parseInt(n, 10));
+              if (!isNaN(s)) systolicBP = s;
+              if (!isNaN(d)) diastolicBP = d;
+            }
+          }
+        }
+
+        if (!bloodSugar && (testName.includes('sugar') || testName.includes('glucose') || testName.includes('diabetic'))) {
+          const sugarVal = result.values?.find(v => v.value && !isNaN(parseFloat(v.value)));
+          if (sugarVal) bloodSugar = parseFloat(sugarVal.value);
+        }
+      }
+    }
+  }
 
   return {
     age: user?.age ?? 0,
     gender: user?.gender ?? 'male',
     heartRate: latestPPG?.heartRate ?? 70,
-    systolicBP: latestManual?.systolicBP ?? 120,
-    diastolicBP: latestManual?.diastolicBP ?? 80,
-    bloodSugar: latestManual?.bloodSugar?.value ?? 90,
-    cholesterol: latestManual?.cholesterol ?? 180,
+    systolicBP: systolicBP ?? 120,
+    diastolicBP: diastolicBP ?? 80,
+    bloodSugar: bloodSugar ?? 90,
+    cholesterol: cholesterol ?? 180,
     spo2: latestPPG?.spo2 ?? 98
   };
 }
