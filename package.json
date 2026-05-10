@@ -34,7 +34,7 @@
     "razorpay": "^2.9.6",
     "socket.io": "^4.8.3",
     "twilio": "^5.12.2",
-    "uuid": "^13.0.0",
+    "uuid": "^8.3.2",
     "web-push": "^3.6.7"
   },
   "devDependencies": {
