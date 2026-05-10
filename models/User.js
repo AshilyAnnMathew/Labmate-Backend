@@ -79,9 +79,21 @@ const userSchema = new mongoose.Schema({
     maxlength: [500, 'Address cannot exceed 500 characters']
   },
   emergencyContact: {
-    type: String,
-    trim: true,
-    maxlength: [100, 'Emergency contact cannot exceed 100 characters']
+    name: {
+      type: String,
+      trim: true,
+      maxlength: [100, 'Emergency contact name cannot exceed 100 characters']
+    },
+    phone: {
+      type: String,
+      trim: true,
+      maxlength: [20, 'Emergency contact phone cannot exceed 20 characters']
+    },
+    relation: {
+      type: String,
+      trim: true,
+      maxlength: [50, 'Emergency contact relation cannot exceed 50 characters']
+    }
   },
   password: {
     type: String,

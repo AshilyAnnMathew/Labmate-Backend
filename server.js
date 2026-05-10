@@ -17,9 +17,10 @@ const server = http.createServer(app);
 
 // Allowed origins for CORS
 const allowedOrigins = [
-  process.env.FRONTEND_URL || 'http://localhost:5173',
+  process.env.FRONTEND_URL,
+  'http://localhost:5173',
   'https://labmatemainfrontend.vercel.app'
-];
+].filter(Boolean);
 
 // Socket.IO setup
 const io = new Server(server, {
